@@ -77,7 +77,7 @@ void Simulator::InitScheduler(string schedulerType)
             quantum = quantum * 10 + qString[i] - '0';
         scheduler = new RR(quantum);
     }
-    if (schedulerType[1] == 'P')
+    if (schedulerType[0] == 'P')
     {
         string qString = schedulerType.substr(1, schedulerType.length() - 1);
         int quantum = 0;
@@ -93,16 +93,39 @@ void Simulator::InitEventQueue()
         eventQueue.push(*new Event(processList[i].AT, processList[i].AT, i, -1, 0));
 }
 
-void Simulator::Run(string inputFileName, string randFileName, bool _verbose, string schedulerType)
-{
+void Simulator::Run(string inputFileName, string randFileName, bool _verbose, string schedulerType) {
     verbose = _verbose;
     InitRandValues(randFileName);
     InitProcessList(inputFileName);
     InitScheduler(schedulerType);
     InitEventQueue();
     
-    while (true)
-    {
+    while (true) {
+        if (pickFlag) {
+            if (readyQueue.empty()) {
+                readyQueue.swap(expireQueue);
+            }
+            if (!readyQueue.empty()) {
+                if (eventQueue.empty() || eventQueue.top() < scheduler->PickFirst(readyQueue, processList)) {
+                    Event event = scheduler->Pick(readyQueue, processList);
+                    if (event.endTime > lastTimeIdleCPU) {
+                        idleCT += event.endTime - lastTimeIdleCPU;
+                        lastTimeIdleCPU = event.endTime;
+                    }
+                    pickFlag = false;
+                    eventQueue.push(*new Event(event.endTime, lastTimeIdleCPU, event.pid, 0, 1));
+                }
+            }
+        }
+        if (!eventQueue.empty()) {
+            Event todo =eventQueue.top();
+            eventQueue.pop();
+            ProcessEvent(todo);
+        }
+        else {
+            break;
+        }
+        /*
         if (pickFlag && !readyQueue.empty())
             if (eventQueue.empty() || eventQueue.top() < scheduler->PickFirst(readyQueue, processList))
             {
@@ -122,7 +145,7 @@ void Simulator::Run(string inputFileName, string randFileName, bool _verbose, st
             ProcessEvent(todo);
         }
         else
-            break;
+            break;*/
     }
 }
 // update idle CT and idle IO for every event processed.
@@ -138,10 +161,21 @@ void Simulator::ProcessEvent(Event event){
             p.TC -= event.endTime - event.startTime;
             p.CBLeft -= event.endTime - event.startTime;
             lastTimeIdleCPU = max(lastTimeIdleCPU, event.endTime);
-            readyQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, 1, 0));
+            bool moveToExpire = false;
+            p.D_PRIO--;
+            if (p.D_PRIO == -1) {
+                p.D_PRIO = p.S_PRIO - 1;
+                moveToExpire = true;
+            }
+            if (scheduler->type == "PRIO" && moveToExpire) {
+                expireQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, 1, 0));
+            } else {
+                readyQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, 1, 0));
+            }
             printf("%4d p=%1d duration=%1d: %s -> %s cb=%1d rem=%1d prio=%1d \n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), p.CBLeft, p.TC, p.D_PRIO);
         } else if (event.prevStatus == 2) {
             // update process io time, simulator last io time, simulator total io time
+            p.D_PRIO = p.S_PRIO - 1;
             p.IT += event.endTime - event.startTime;
             lastTimeIdleIO = max(lastTimeIdleIO, event.endTime);
             readyQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, 2, 0));

@@ -117,9 +117,12 @@ Event PRIO::Pick(deque<Event> &readyQueue, vector<Process>& processList)
 {
     deque<Event>::iterator itPick = readyQueue.begin();
     // todo
-    for (deque<Event>::iterator it = readyQueue.begin(); it != readyQueue.end(); ++it)
-        if (it->endTime < itPick->endTime || (it->endTime == itPick->endTime && it->eventNum < itPick->eventNum))
+    for (deque<Event>::iterator it = readyQueue.begin(); it != readyQueue.end(); ++it) {
+        Process p = processList[it->pid];
+        Process pPick = processList[itPick->pid];
+        if (p.D_PRIO > pPick.D_PRIO || (p.D_PRIO == pPick.D_PRIO && it->eventNum < itPick->eventNum))
             itPick = it;
+    }
     Event ret = *itPick;
     readyQueue.erase(itPick);
     
