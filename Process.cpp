@@ -11,13 +11,13 @@
 Process::Process(int _AT, int _TC, int _CB, int _IO, int _PRIO)
 {
     AT = _AT;
-    TC = _TC;
+    TCLeft = _TC;
     CB = _CB;
     IO = _IO;
     S_PRIO = _PRIO;
     D_PRIO = S_PRIO - 1;
     
-    oldTC = TC;
+    TC = TCLeft;
     CBLeft = 0;
     FT = 0;
     TT = 0;

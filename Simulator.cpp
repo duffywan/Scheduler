@@ -125,27 +125,6 @@ void Simulator::Run(string inputFileName, string randFileName, bool _verbose, st
         else {
             break;
         }
-        /*
-        if (pickFlag && !readyQueue.empty())
-            if (eventQueue.empty() || eventQueue.top() < scheduler->PickFirst(readyQueue, processList))
-            {
-                Event event = scheduler->Pick(readyQueue, processList);
-                if (event.endTime > lastTimeIdleCPU)
-                {
-                    idleCT += event.endTime - lastTimeIdleCPU;
-                    lastTimeIdleCPU = event.endTime;
-                }
-                pickFlag = false;
-                eventQueue.push(*new Event(event.endTime, lastTimeIdleCPU, event.pid, 0, 1));
-            }
-        if (!eventQueue.empty())
-        {
-            Event todo =eventQueue.top();
-            eventQueue.pop();
-            ProcessEvent(todo);
-        }
-        else
-            break;*/
     }
 }
 // update idle CT and idle IO for every event processed.
@@ -158,7 +137,7 @@ void Simulator::ProcessEvent(Event event){
             // if cpu is not runing other processes, we can pick one from ready queue
             pickFlag = true;
             // update process total time, cpu burst left, simulator cpu last idle time
-            p.TC -= event.endTime - event.startTime;
+            p.TCLeft -= event.endTime - event.startTime;
             p.CBLeft -= event.endTime - event.startTime;
             lastTimeIdleCPU = max(lastTimeIdleCPU, event.endTime);
             bool moveToExpire = false;
@@ -172,25 +151,28 @@ void Simulator::ProcessEvent(Event event){
             } else {
                 readyQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, 1, 0));
             }
-            printf("%4d p=%1d duration=%1d: %s -> %s cb=%1d rem=%1d prio=%1d \n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), p.CBLeft, p.TC, p.D_PRIO);
+            if (verbose)
+                printf("%4d p=%1d duration=%1d: %s -> %s cb=%1d rem=%1d prio=%1d \n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), p.CBLeft, p.TCLeft, p.D_PRIO);
         } else if (event.prevStatus == 2) {
             // update process io time, simulator last io time, simulator total io time
             p.D_PRIO = p.S_PRIO - 1;
             p.IT += event.endTime - event.startTime;
             lastTimeIdleIO = max(lastTimeIdleIO, event.endTime);
             readyQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, 2, 0));
-            printf("%4d p=%1d duration=%1d: %s -> %s\n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str());
+            if (verbose)
+                printf("%4d p=%1d duration=%1d: %s -> %s\n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str());
         } else {
             readyQueue.push_back(*new Event(event.endTime, event.endTime, event.pid, -1, 0));
-            printf("%4d p=%1d duration=%1d: %s -> %s\n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str());
+            if (verbose)
+                printf("%4d p=%1d duration=%1d: %s -> %s\n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str());
         }
     }
     if (event.status == 1) {
         p.CW += event.endTime - event.startTime;
         if (p.CBLeft == 0) {
             p.CBLeft = myrandom(p.CB);
-            if (p.CBLeft > p.TC) {
-                p.CBLeft = p.TC;
+            if (p.CBLeft > p.TCLeft) {
+                p.CBLeft = p.TCLeft;
             }
         }
         if (scheduler->quantum == 0 || p.CBLeft <= scheduler->quantum) {
@@ -200,16 +182,17 @@ void Simulator::ProcessEvent(Event event){
             // RR or PRIO, quantum expres but cpu burst not finish, move to ready state
             eventQueue.push(*new Event(event.endTime, event.endTime + scheduler->quantum, event.pid, 1, 0));
         }
-        printf("%4d p=%1d duration=%1d: %s -> %s cb=%1d rem=%1d prio=%1d \n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), p.CBLeft, p.TC, p.D_PRIO);
+        if (verbose)
+            printf("%4d p=%1d duration=%1d: %s -> %s cb=%1d rem=%1d prio=%1d \n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), p.CBLeft, p.TCLeft, p.D_PRIO);
     }
     if (event.status == 2) {
         // if cpu is not runing other processes, we can pick one from ready queue
         pickFlag = true;
-        p.TC -= event.endTime - event.startTime;
+        p.TCLeft -= event.endTime - event.startTime;
         p.CBLeft -= event.endTime - event.startTime; // should be 0
         //pickFlag = true;
         lastTimeIdleCPU = max(lastTimeIdleCPU, event.endTime);
-        if (p.TC == 0) {
+        if (p.TCLeft == 0) {
             p.FT = event.endTime;
             p.TT = p.FT - p.AT;
             return;
@@ -221,7 +204,8 @@ void Simulator::ProcessEvent(Event event){
             idleIO += event.endTime - lastTimeIdleIO;
         if (lastTimeIdleIO < event.endTime + newIO)
             lastTimeIdleIO = event.endTime + newIO;
-        printf("%4d p=%1d duration=%1d: %s -> %s ib=%d rem=%d\n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), newIO, p.TC);
+        if (verbose)
+            printf("%4d p=%1d duration=%1d: %s -> %s ib=%d rem=%d\n", event.endTime, event.pid, event.endTime - event.startTime, event.getPrevStatus().c_str(), event.getStatus().c_str(), newIO, p.TCLeft);
     }
 }
 
@@ -234,7 +218,7 @@ void Simulator::Print() {
     for (int i = 0; i < processTotalNum; ++i)
     {
         Process& p = processList[i];
-        printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n", i, p.AT, p.oldTC, p.CB, p.IO, p.S_PRIO, p.FT, p.TT, p.IT, p.CW);
+        printf("%04d: %4d %4d %4d %4d %1d | %5d %5d %5d %5d\n", i, p.AT, p.TC, p.CB, p.IO, p.S_PRIO, p.FT, p.TT, p.IT, p.CW);
         if (p.FT > FT)
             FT = p.FT;
         totalTT += p.TT;

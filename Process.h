@@ -13,13 +13,13 @@ class Process
 {
 public:
     int AT;
-    int TC;
+    int TCLeft;
     int CB;
     int IO;
     int S_PRIO;
     int D_PRIO;
     
-    int oldTC;
+    int TC;
     int CBLeft;
     int FT;
     int TT;

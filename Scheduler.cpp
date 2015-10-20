@@ -77,10 +77,10 @@ Event SJF::Pick(deque<Event> &readyQueue, vector<Process>& processList)
     deque<Event>::iterator itPick = readyQueue.begin();
     
     for (deque<Event>::iterator it = readyQueue.begin(); it != readyQueue.end(); ++it)
-        if (processList[it->pid].TC < processList[itPick->pid].TC)
+        if (processList[it->pid].TCLeft < processList[itPick->pid].TCLeft)
             itPick = it;
         else
-            if (processList[it->pid].TC == processList[itPick->pid].TC)
+            if (processList[it->pid].TCLeft == processList[itPick->pid].TCLeft)
                 if (it->endTime < itPick->endTime || (it->endTime == itPick->endTime && it->eventNum < itPick->eventNum))
                     itPick = it;
     Event ret = *itPick;
